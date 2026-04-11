@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Email Verification</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 32px 16px; }
+.card { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 28px 32px; width: 100%; max-width: 480px; }
+label { display: block; font-size: 13px; font-weight: 500; color: #555; margin-bottom: 6px; }
+input[type="text"] { width: 100%; padding: 9px 12px; border: 0.5px solid rgba(0,0,0,0.18); border-radius: 8px; font-size: 14px; color: #1a1a1a; background: #fafafa; outline: none; }
+input[type="text"]:focus { border-color: #7F77DD; box-shadow: 0 0 0 3px rgba(127,119,221,0.12); background: #fff; }
+.field { margin-bottom: 20px; }
+.drop-zone { border: 1.5px dashed rgba(0,0,0,0.18); border-radius: 8px; padding: 28px 16px; text-align: center; cursor: pointer; background: #fafafa; transition: border-color 0.15s, background 0.15s; }
+.drop-zone.drag-over { border-color: #7F77DD; background: #EEEDFE; }
+.drop-zone.has-file { border-color: #1D9E75; background: #E1F5EE; }
+.drop-icon { width: 32px; height: 32px; margin: 0 auto 10px; opacity: 0.35; }
+.drop-label { font-size: 13px; color: #888; }
+.drop-label span { color: #7F77DD; font-weight: 500; cursor: pointer; }
+.file-name { font-size: 13px; color: #1D9E75; font-weight: 500; margin-top: 6px; }
+button[type="submit"] { width: 100%; padding: 11px; background: #534AB7; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s, transform 0.1s; }
+button[type="submit"]:hover { background: #3C3489; }
+button[type="submit"]:active { transform: scale(0.98); }
+button[type="submit"]:disabled { background: #B4B2A9; cursor: not-allowed; }
+.status { margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; }
+.status.success { background: #E1F5EE; color: #085041; border: 0.5px solid #5DCAA5; display: block; }
+.status.error { background: #FCEBEB; color: #791F1F; border: 0.5px solid #F09595; display: block; }
+.status.loading { background: #EEEDFE; color: #3C3489; border: 0.5px solid #AFA9EC; display: block; }
+.heading { font-size: 17px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+.subheading { font-size: 13px; color: #888; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <p class="heading">Email verification</p>
+  <p class="subheading">Upload a CSV to verify emails via MillionVerifier</p>
+
+  <div class="field">
+    <label for="list-name">List name</label>
+    <input type="text" id="list-name" placeholder="e.g. HTSL Q2 Leads" autocomplete="off" />
+  </div>
+
+  <div class="field">
+    <label>CSV file</label>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-input').click()">
+      <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.5">
+        <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12M8 8l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p class="drop-label"><span>Choose a file</span> or drag it here</p>
+      <p class="file-name" id="file-name" style="display:none"></p>
+      <input type="file" id="csv-input" accept=".csv" style="display:none" />
+    </div>
+  </div>
+
+  <button type="submit" id="submit-btn" disabled onclick="submitForm()">Submit for verification</button>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const WEBHOOK_URL = 'https://whalenavigator.app.n8n.cloud/webhook/41d10c17-b74b-4f2c-a8c1-09be7c3a9145';
+
+const dropZone = document.getElementById('drop-zone');
+const csvInput = document.getElementById('csv-input');
+const fileNameEl = document.getElementById('file-name');
+const submitBtn = document.getElementById('submit-btn');
+const listNameInput = document.getElementById('list-name');
+const statusEl = document.getElementById('status');
+let selectedFile = null;
+
+function checkReady() {
+  submitBtn.disabled = !(selectedFile && listNameInput.value.trim());
+}
+
+function setFile(file) {
+  if (!file || !file.name.endsWith('.csv')) {
+    showStatus('Please upload a .csv file.', 'error');
+    return;
+  }
+  selectedFile = file;
+  fileNameEl.textContent = file.name;
+  fileNameEl.style.display = 'block';
+  dropZone.classList.add('has-file');
+  checkReady();
+}
+
+csvInput.addEventListener('change', () => setFile(csvInput.files[0]));
+listNameInput.addEventListener('input', checkReady);
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  setFile(e.dataTransfer.files[0]);
+});
+
+function showStatus(msg, type) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status ' + type;
+}
+
+async function submitForm() {
+  const listName = listNameInput.value.trim();
+  if (!listName || !selectedFile) return;
+
+  submitBtn.disabled = true;
+  showStatus('Submitting...', 'loading');
+
+  const formData = new FormData();
+  formData.append('list_name', listName);
+  formData.append('csv_file', selectedFile, selectedFile.name);
+
+  try {
+    const res = await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+    if (res.ok) {
+      showStatus('Submitted! Verification is running in the background.', 'success');
+      listNameInput.value = '';
+      selectedFile = null;
+      fileNameEl.style.display = 'none';
+      dropZone.classList.remove('has-file');
+      csvInput.value = '';
+    } else {
+      showStatus('Server error: ' + res.status + '. Check your webhook URL.', 'error');
+      submitBtn.disabled = false;
+    }
+  } catch (err) {
+    showStatus('Could not reach n8n. Check the webhook URL and CORS settings.', 'error');
+    submitBtn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
